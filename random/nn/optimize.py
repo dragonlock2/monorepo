@@ -2,7 +2,6 @@ import numpy as np
 
 class SoftmaxCrossEntropyLoss:
     def forward(self, input, output_true):
-        assert(input.ndim == 2) # TODO support single sample
         self.output_true = output_true
 
         # softmax
@@ -19,7 +18,7 @@ class SoftmaxCrossEntropyLoss:
         del_output[np.arange(del_output.shape[0]), self.output_true] -= 1
         return del_output
 
-def BGD(model, input, output, loss_fn=SoftmaxCrossEntropyLoss, alpha=0.01, batch_size=64, epochs=20):
+def MBGD(model, input, output, loss_fn=SoftmaxCrossEntropyLoss, alpha=0.1, batch_size=32, epochs=10):
     # TODO support diff loss function
     loss_state = loss_fn()
     for epoch in range(epochs):

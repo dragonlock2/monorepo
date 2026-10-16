@@ -16,6 +16,18 @@ class Layer(ABC): # super unoptimized API
     def update(self, alpha):
         pass # uses cached internal gradients from last backward()
 
+class Flatten(Layer):
+    def forward(self, input, train=False):
+        if train:
+            self.shape = input.shape
+        return input.reshape(input.shape[0], -1)
+
+    def backward(self, del_output):
+        return del_output.reshape(self.shape)
+
+    def update(self, alpha):
+        pass
+
 class Linear(Layer):
     def __init__(self, input_size, output_size, W=None, b=None):
         # Kaiming init for ReLU
@@ -28,7 +40,6 @@ class Linear(Layer):
         return input @ self.W + self.b
 
     def backward(self, del_output):
-        assert(self.input.ndim == 2) # TODO support single sample
         batch_size = self.input.shape[0]
         self.dW = (self.input.T @ del_output) / batch_size
         self.db = np.sum(del_output, axis=0) / batch_size
