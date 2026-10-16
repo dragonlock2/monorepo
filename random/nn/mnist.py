@@ -12,12 +12,11 @@ MLP from scratch.
 class MNIST_MLP(layer.MLP):
     def __init__(self):
         super().__init__((
-            # TODO AdamW
             # TODO CNN
             layer.Flatten(),
             layer.Linear(784, 256),
             layer.ReLU(),
-            layer.Dropout(0.1),
+            layer.Dropout(0.2),
             layer.Linear(256, 10),
         ))
 
@@ -32,7 +31,8 @@ if __name__ == "__main__":
     # train
     start = time.time()
     # optimize.MBGD(model, input_train, output_train, batch_size=32, epochs=10)
-    optimize.Adam(model, input_train, output_train, batch_size=64, epochs=10)
+    # optimize.Adam(model, input_train, output_train, batch_size=64, epochs=10)
+    optimize.AdamW(model, input_train, output_train, batch_size=64, epochs=10)
     elapse = time.time() - start
     print(f"training took {elapse:.1f}s")
 

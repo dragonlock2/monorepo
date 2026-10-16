@@ -3,6 +3,25 @@ from abc import ABC, abstractmethod
 
 rng = np.random.default_rng(seed=69)
 
+def update(cfg, state, weight, grad):
+    match cfg["type"]:
+        case "grad":
+            weight -= cfg["alpha"] * grad
+        case "adam":
+            alpha, b1, b2, lamb, step = cfg["alpha"], cfg["beta1"], cfg["beta2"], cfg["lambda"], cfg["step"]
+            if state is None:
+                state = { "avg": 0, "avg2": 0 }
+            state["avg"] = b1 * state["avg"] + (1 - b1) * grad
+            state["avg2"] = b2 * state["avg2"] + (1 - b2) * grad**2
+            avg = state["avg"] / (1 - b1**step)
+            avg2 = state["avg2"] / (1 - b2**step)
+            if lamb is not None:
+                weight -= alpha * lamb * weight
+            weight -= alpha * avg / (np.sqrt(avg2) + 1e-10)
+        case _:
+            raise Exception(f"{cfg['type']} not supported")
+    return weight, state
+
 class Layer(ABC): # super unoptimized API
     @abstractmethod
     def forward(self, input, train=False):
@@ -24,6 +43,7 @@ class Layer(ABC): # super unoptimized API
         - cfg["alpha"]
         - cfg["beta1"]
         - cfg["beta2"]
+        - cfg["lambda"]: float if apply weight decay, None otherwise
         - cfg["step"]: 1,2,3,... (for cold start bias correction)
         """
         pass # uses cached internal gradients from last backward()
@@ -45,12 +65,8 @@ class Linear(Layer):
         # Kaiming init for ReLU
         self.W = rng.normal(0, np.sqrt(2 / input_size), (input_size, output_size)) if W is None else W
         self.b = np.zeros(output_size) if b is None else b
-
-        # for Adam optimizer
-        self.avg_dW = 0
-        self.avg_dW2 = 0
-        self.avg_db = 0
-        self.avg_db2 = 0
+        self.dW_state = None
+        self.db_state = None
 
     def forward(self, input, train=False):
         if train:
@@ -64,26 +80,8 @@ class Linear(Layer):
         return del_output @ self.W.T
 
     def update(self, cfg):
-        match cfg["type"]:
-            case "grad":
-                self.W -= cfg["alpha"] * self.dW
-                self.b -= cfg["alpha"] * self.db
-            case "adam":
-                b1, b2, step, alpha = cfg["beta1"], cfg["beta2"], cfg["step"], cfg["alpha"]
-                self.avg_dW = b1 * self.avg_dW + (1 - b1) * self.dW
-                self.avg_dW2 = b2 * self.avg_dW2 + (1 - b2) * self.dW**2
-                self.avg_db = b1 * self.avg_db + (1 - b1) * self.db
-                self.avg_db2 = b2 * self.avg_db2 + (1 - b2) * self.db**2
-
-                avg_dW = self.avg_dW / (1 - b1**step)
-                avg_dW2 = self.avg_dW2 / (1 - b2**step)
-                avg_db = self.avg_db / (1 - b1**step)
-                avg_db2 = self.avg_db2 / (1 - b2**step)
-
-                self.W -= alpha * avg_dW / (np.sqrt(avg_dW2) + 1e-10)
-                self.b -= alpha * avg_db / (np.sqrt(avg_db2) + 1e-10)
-            case _:
-                raise Exception(f"{cfg['type']} not supported")
+        self.W, self.dW_state = update(cfg, self.dW_state, self.W, self.dW)
+        self.b, self.db_state = update(cfg, self.db_state, self.b, self.db)
 
 class ReLU(Layer):
     def forward(self, input, train=False):
